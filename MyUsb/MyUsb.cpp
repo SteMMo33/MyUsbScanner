@@ -3,6 +3,9 @@
 
 #include "stdafx.h"
 #include "MyUsb.h"
+#include "include\libusb-1.0\libusb.h"
+
+#pragma comment( lib, "MS32\\dll\\libusb-1.0.lib")
 
 #define MAX_LOADSTRING 100
 
@@ -11,11 +14,17 @@ HINSTANCE hInst;                                // current instance
 WCHAR szTitle[MAX_LOADSTRING];                  // The title bar text
 WCHAR szWindowClass[MAX_LOADSTRING];            // the main window class name
 
+libusb_context * ctx = NULL;
+
+
 // Forward declarations of functions included in this code module:
 ATOM                MyRegisterClass(HINSTANCE hInstance);
 BOOL                InitInstance(HINSTANCE, int);
 LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
+INT_PTR CALLBACK	MyUsbProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+
+
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                      _In_opt_ HINSTANCE hPrevInstance,
@@ -26,7 +35,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     UNREFERENCED_PARAMETER(lpCmdLine);
 
     // TODO: Place code here.
+	DialogBox(hInstance, MAKEINTRESOURCE(IDD_DIALOGUSB), NULL, MyUsbProc);
 
+#if 0
     // Initialize global strings
     LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
     LoadStringW(hInstance, IDC_MYUSB, szWindowClass, MAX_LOADSTRING);
@@ -53,6 +64,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     }
 
     return (int) msg.wParam;
+#endif
+
+	return 1;
 }
 
 
@@ -177,4 +191,29 @@ INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
         break;
     }
     return (INT_PTR)FALSE;
+}
+
+
+// Message handler for USB box.
+INT_PTR CALLBACK MyUsbProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	UNREFERENCED_PARAMETER(lParam);
+	switch (message)
+	{
+	case WM_INITDIALOG:
+		libusb_init(&ctx);
+		libusb_set_option(ctx, LIBUSB_OPTION_USE_USBDK);
+		return (INT_PTR)TRUE;
+
+	case WM_COMMAND:
+		if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
+		{
+			libusb_exit(ctx);
+
+			EndDialog(hDlg, LOWORD(wParam));
+			return (INT_PTR)TRUE;
+		}
+		break;
+	}
+	return (INT_PTR)FALSE;
 }
