@@ -1,20 +1,33 @@
 // MyUsb.cpp : Defines the entry point for the application.
 //
+/**
+	Test di utilizzo della libreria libusb
+	Sito: https://libusb.info/
+
+*/
 
 #include "stdafx.h"
 #include "MyUsb.h"
+#include <windowsx.h>
+
 #include "include\libusb-1.0\libusb.h"
 
 #pragma comment( lib, "MS32\\dll\\libusb-1.0.lib")
 
 #define MAX_LOADSTRING 100
 
+#define VID_DEVICE		0x0220
+#define PID_DEVICE		0x1000
+
+
 // Global Variables:
 HINSTANCE hInst;                                // current instance
 WCHAR szTitle[MAX_LOADSTRING];                  // The title bar text
 WCHAR szWindowClass[MAX_LOADSTRING];            // the main window class name
+HWND	gListbox;
 
 libusb_context * ctx = NULL;
+const libusb_version * pLibVersion;
 
 
 // Forward declarations of functions included in this code module:
@@ -23,6 +36,7 @@ BOOL                InitInstance(HINSTANCE, int);
 LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK	MyUsbProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+void				ListDevices(HWND hDlg);
 
 
 
@@ -194,6 +208,69 @@ INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 }
 
 
+void PrintVersion(HWND hDlg)
+{
+	TCHAR msg[300];
+	wsprintf( msg, L"Lib %d.%d - %S", pLibVersion->major, pLibVersion->minor, pLibVersion->describe);
+	ListBox_AddString(GetDlgItem(hDlg, IDC_USBLIST), msg);
+}
+
+
+TCHAR* GetClassDescription(int nClass)
+{
+	TCHAR desc[100];
+
+	switch (nClass) {
+	case LIBUSB_CLASS_PER_INTERFACE: return L"Per interface"; break;
+	case LIBUSB_CLASS_COMM: return L"Communication"; break;
+	case LIBUSB_CLASS_HID: return L"HID"; break;
+	case LIBUSB_CLASS_HUB: return L"HUB"; break;
+	default:
+		wsprintf(desc, L"%d", nClass);
+		return desc;
+		break;
+	}
+}
+
+
+
+void ListDevices(HWND hDlg)
+{
+	TCHAR msg[300];
+	libusb_device **ppDevicesList;
+
+	int nDevices = libusb_get_device_list( ctx, &ppDevicesList);
+
+	wsprintf( msg, L"Found %d devices", nDevices);
+	ListBox_AddString( gListbox, msg);
+	
+	for (int i = 0; i < nDevices; i++) {
+		libusb_device *pDev = ppDevicesList[i];
+
+		ListBox_AddString(gListbox, "");
+
+		wsprintf(msg, L"Device %d:", i);
+		ListBox_AddString(gListbox, msg);
+
+		libusb_device_descriptor devDescr;
+		int ret = libusb_get_device_descriptor(pDev, &devDescr);
+		if (ret == 0) {
+			wsprintf(msg, L"VID: %04X - PID: %04X", devDescr.idVendor, devDescr.idProduct);
+			ListBox_AddString(gListbox, msg);
+			wsprintf(msg, L"Class: %s %d", GetClassDescription(devDescr.bDeviceClass), devDescr.bDeviceSubClass);
+			ListBox_AddString(gListbox, msg);
+		}
+		else {
+			// err
+			wsprintf(msg, L"Error getting descriptor %d", ret);
+			ListBox_AddString(gListbox, msg);
+		}
+	}
+
+	libusb_free_device_list(ppDevicesList, 1);
+};
+
+
 // Message handler for USB box.
 INT_PTR CALLBACK MyUsbProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -201,8 +278,14 @@ INT_PTR CALLBACK MyUsbProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam
 	switch (message)
 	{
 	case WM_INITDIALOG:
+		gListbox = GetDlgItem(hDlg, IDC_USBLIST);
+
 		libusb_init(&ctx);
 		libusb_set_option(ctx, LIBUSB_OPTION_USE_USBDK);
+
+		pLibVersion = libusb_get_version();
+		pLibVersion->major;
+		PrintVersion(hDlg);
 		return (INT_PTR)TRUE;
 
 	case WM_COMMAND:
@@ -212,6 +295,12 @@ INT_PTR CALLBACK MyUsbProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam
 
 			EndDialog(hDlg, LOWORD(wParam));
 			return (INT_PTR)TRUE;
+		}
+		else if (LOWORD(wParam) == IDC_OPENDEV) {
+			libusb_device_handle *pHandle = libusb_open_device_with_vid_pid(ctx, VID_DEVICE, PID_DEVICE);
+		}
+		else if (LOWORD(wParam) == IDC_LISTDEVS) {
+			ListDevices(hDlg);
 		}
 		break;
 	}
