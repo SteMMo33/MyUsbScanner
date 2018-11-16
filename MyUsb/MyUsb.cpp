@@ -252,12 +252,53 @@ void ListDevices(HWND hDlg)
 		wsprintf(msg, L"Device %d:", i);
 		ListBox_AddString(gListbox, msg);
 
+		int nRow;
 		libusb_device_descriptor devDescr;
+		libusb_device_handle *handle;
+
 		int ret = libusb_get_device_descriptor(pDev, &devDescr);
-		if (ret == 0) {
+		if (ret == LIBUSB_SUCCESS) {
+
 			wsprintf(msg, L"VID: %04X - PID: %04X", devDescr.idVendor, devDescr.idProduct);
+			nRow = ListBox_AddString(gListbox, msg);
+			ListBox_SetItemData(gListbox, nRow, pDev);
+
+			ret = libusb_open(pDev, &handle);
+			if (LIBUSB_SUCCESS == ret) {
+				TCHAR wDescr[200];
+				unsigned char string[200];
+
+				if (devDescr.iManufacturer) {
+
+					ret = libusb_get_string_descriptor_ascii(handle, devDescr.iManufacturer, string, sizeof(string));
+					if (ret > 0)
+						wsprintf(wDescr, L"%S - ", string);
+					else
+						wsprintf(wDescr, L"%04X - ", devDescr.idVendor);
+				}
+				else
+					wsprintf(wDescr, L"%04X - ", devDescr.idVendor);
+
+				if (devDescr.iProduct) {
+					ret = libusb_get_string_descriptor_ascii(handle, devDescr.iProduct, string, sizeof(string));
+					if (ret > 0)
+						wsprintf(wDescr + wcslen(wDescr), L"%S", string);
+					else
+						wsprintf(wDescr + wcslen(wDescr), L"%04X", devDescr.idProduct);
+				}
+				else
+					wsprintf(wDescr + wcslen(wDescr), L"%04X", devDescr.idProduct);
+				ListBox_AddString(gListbox, wDescr);
+				libusb_close(handle);
+			}
+
+			wsprintf(msg, L"MaxPacketSize: %d", devDescr.bMaxPacketSize0);
 			ListBox_AddString(gListbox, msg);
-			wsprintf(msg, L"Class: %s %d", GetClassDescription(devDescr.bDeviceClass), devDescr.bDeviceSubClass);
+
+			wsprintf(msg, L"NumConfig: %d", devDescr.bNumConfigurations);
+			ListBox_AddString(gListbox, msg);
+
+			wsprintf(msg, L"Class: %s Subclass: %d ", GetClassDescription(devDescr.bDeviceClass), devDescr.bDeviceSubClass);
 			ListBox_AddString(gListbox, msg);
 		}
 		else {
@@ -269,6 +310,35 @@ void ListDevices(HWND hDlg)
 
 	libusb_free_device_list(ppDevicesList, 1);
 };
+
+
+void OpenDevice(HWND hDlg)
+{
+	int idxsel = ListBox_GetCurSel(gListbox);
+	libusb_device *pDev = (libusb_device*)ListBox_GetItemData(gListbox, idxsel);
+
+	if (pDev == NULL) return;
+
+	libusb_device_handle *hDev;
+	int usbRet = libusb_open(pDev, &hDev);
+	if (usbRet == 0) {
+		libusb_close(hDev);
+	}
+	else {
+		TCHAR msg[200];
+		switch (usbRet) {
+		default:
+		case LIBUSB_ERROR_ACCESS:
+			wcscpy(msg, L"Error access");
+			break;
+
+			wsprintf(msg, L"Open error: %X", usbRet);
+			break;
+		}
+		ListBox_AddString(gListbox, msg);
+	}
+}
+
 
 
 // Message handler for USB box.
@@ -298,6 +368,7 @@ INT_PTR CALLBACK MyUsbProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam
 		}
 		else if (LOWORD(wParam) == IDC_OPENDEV) {
 			libusb_device_handle *pHandle = libusb_open_device_with_vid_pid(ctx, VID_DEVICE, PID_DEVICE);
+			OpenDevice(hDlg);
 		}
 		else if (LOWORD(wParam) == IDC_LISTDEVS) {
 			ListDevices(hDlg);
